@@ -58,8 +58,7 @@ module.exports = function (grunt) {
                             'nls/{,*/}*.js',
                             'xorigin.js',
                             'dependencies.js',
-                            'thirdparty/requirejs/require.js',
-                            'LiveDevelopment/launch.html'
+                            'thirdparty/requirejs/require.js'
                         ]
                     },
                     /* node domains are not minified and must be copied to dist */

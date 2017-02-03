@@ -32,7 +32,6 @@ define(function (require, exports, module) {
     // Load dependent modules
     var HTMLInstrumentation = require("language/HTMLInstrumentation"),
         HTMLSimpleDOM       = require("language/HTMLSimpleDOM"),
-        RemoteFunctions     = require("text!LiveDevelopment/Agents/RemoteFunctions.js"),
         SpecRunnerUtils     = require("spec/SpecRunnerUtils"),
         WellFormedDoc       = require("text!spec/HTMLInstrumentation-test-files/wellformed.html"),
         NotWellFormedDoc    = require("text!spec/HTMLInstrumentation-test-files/omitEndTags.html"),

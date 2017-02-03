@@ -670,29 +670,6 @@ a, img {
     .sprite-icon(0, 0, 24px, 24px, "images/updateSprites.svg");
 }
 
-#toolbar-go-live {
-    // background-position is 0 0 for 24x24 icons
-    // Default icon is for the 'disconnected' state
-    // The 'connecting failed' (.warning) state also maps here
-    .sprite-icon(0, 0, 24px, 24px, "images/live_development_sprites.svg");
-    // 'Connected' state
-    &.success {
-        .sprite-swap(0, 24px);
-    }
-    // 'Connection in progress' state
-    &.info {
-        .sprite-swap(0, 48px);
-    }
-    // 'Out-of-sync' state
-    &.out-of-sync {
-        .sprite-swap(0, 72px);
-    }
-    // 'sync-error'
-    &.sync-error {
-        .sprite-swap(0, 96px);
-    }
-}
-
 #toolbar-extension-manager {
     .sprite-icon(0, 0, 24px, 24px, "images/extension-manager-sprite.svg");
     &.updatesAvailable {
@@ -1979,10 +1956,6 @@ textarea.exclusions-editor {
         white-space: nowrap;
         width: 100%;
         padding-left: 10px;
-    }
-    
-    .inspector-section > td {
-        padding-left: 5px;
     }
 }
 

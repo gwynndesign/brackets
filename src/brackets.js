@@ -103,7 +103,6 @@ define(function (require, exports, module) {
     require("file/FileUtils");
     require("project/SidebarView");
     require("utils/Resizer");
-    require("LiveDevelopment/main");
     require("utils/NodeConnection");
     require("utils/NodeDomain");
     require("utils/ColorUtils");
@@ -171,7 +170,6 @@ define(function (require, exports, module) {
             DocumentCommandHandlers : DocumentCommandHandlers,
             DocumentManager         : DocumentManager,
             DocumentModule          : require("document/Document"),
-            DOMAgent                : require("LiveDevelopment/Agents/DOMAgent"),
             DragAndDrop             : DragAndDrop,
             EditorManager           : EditorManager,
             ExtensionLoader         : ExtensionLoader,
@@ -185,13 +183,10 @@ define(function (require, exports, module) {
             FindInFiles             : require("search/FindInFiles"),
             FindInFilesUI           : require("search/FindInFilesUI"),
             HTMLInstrumentation     : require("language/HTMLInstrumentation"),
-            Inspector               : require("LiveDevelopment/Inspector/Inspector"),
             InstallExtensionDialog  : require("extensibility/InstallExtensionDialog"),
             JSUtils                 : JSUtils,
             KeyBindingManager       : KeyBindingManager,
             LanguageManager         : LanguageManager,
-            LiveDevelopment         : require("LiveDevelopment/LiveDevelopment"),
-            LiveDevServerManager    : require("LiveDevelopment/LiveDevServerManager"),
             MainViewManager         : MainViewManager,
             MainViewFactory         : require("view/MainViewFactory"),
             Menus                   : Menus,
@@ -200,7 +195,6 @@ define(function (require, exports, module) {
             PerfUtils               : PerfUtils,
             PreferencesManager      : PreferencesManager,
             ProjectManager          : ProjectManager,
-            RemoteAgent             : require("LiveDevelopment/Agents/RemoteAgent"),
             ScrollTrackMarkers      : require("search/ScrollTrackMarkers"),
             UpdateNotification      : require("utils/UpdateNotification"),
             WorkingSetView          : WorkingSetView,
