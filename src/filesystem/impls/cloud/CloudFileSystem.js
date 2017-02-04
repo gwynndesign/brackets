@@ -60,8 +60,10 @@ define(function (require, exports, module) {
             }, 50);
         };
     }
+	
+	var cloudContent = {};
     
-    var demoContent = {
+    cloudContent = {
         "index.html": "<html>\n<head>\n    <title>Hello, world!</title>\n</head>\n<body>\n    Welcome to Brackets!\n</body>\n</html>",
         "main.css": ".hello {\n    content: 'world!';\n}",
         "samples": {
@@ -112,21 +114,23 @@ define(function (require, exports, module) {
             "test.txt": "Sample text"
         }
     };
+	
     function _stripTrailingSlash(path) {
         return path[path.length - 1] === "/" ? path.substr(0, path.length - 1) : path;
     }
-    function _getFromDemoStore(fullPath) {
+	
+    function _getFromCloudStore(fullPath) {
         var prefix = "/Getting Started/";
         if (fullPath.substr(0, prefix.length) !== prefix) {
             return null;
         }
         var suffix = _stripTrailingSlash(fullPath.substr(prefix.length));
         if (!suffix) {
-            return demoContent;
+            return cloudContent;
         }
         
         var segments = suffix.split("/");
-        var dir = demoContent;
+        var dir = cloudContent;
         var i;
         for (i = 0; i < segments.length; i++) {
             if (!dir) { return null; }
@@ -138,20 +142,10 @@ define(function (require, exports, module) {
     function _statFromStore(storeData) {
         return _makeFakeStat(typeof storeData === "string");
     }
+	
     function _nameFromPath(path) {
         var segments = _stripTrailingSlash(path).split("/");
         return segments[segments.length - 1];
-    }
-    
-    function stat(path, callback) {
-        callback = _forceAsync(callback);
-        
-        var result = _getFromDemoStore(path);
-        if (result || result === "") {
-            callback(null, _statFromStore(result));
-        } else {
-            callback(FileSystemError.NOT_FOUND);
-        }
     }
     
     function exists(path, callback) {
@@ -163,62 +157,154 @@ define(function (require, exports, module) {
             }
         });
     }
+	
+	function _postServer(func, data, callback) {
+		const URL = location.origin + "/api/filesystem/" + func,
+			  xhr = new XMLHttpRequest();
+		
+		xhr.open("POST", URL, true);
+
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState === 4) {
+				// DONE
+				if (xhr.status === 200) {
+					// OKAY
+					console.info("xhr.responseText", xhr.responseText);
+					
+					let parsedObject;
+					
+					parsedObject = xhr.responseText;
+					
+					try {
+						parsedObject = JSON.parse(xhr.responseText);
+					} catch (ex) {
+						console.warn(ex);
+					}
+					
+					callback(null, parsedObject);
+				} else {
+					// Error
+					console.error(xhr.responseText);
+					callback(xhr.responseText);
+				}
+			}
+		}
+		
+		// Send data
+		if (!data) {
+			xhr.send("{}");
+		} else if (typeof data === "object") {
+			console.info(`_postServer/typeof data === "object"`, true);
+			xhr.setRequestHeader("Content-type", "application/json");
+			
+			try {
+				xhr.send(JSON.stringify(data));
+			} catch (ex) {
+				callback(ex);
+			}
+		} else {
+			xhr.send(data);
+		}
+	}
+	
+    function stat(path, callback) {
+		_postServer("stat", path, (error, data) => {
+			console.info("stat/data", data);
+			
+			if (error) {
+				console.error("stat/error", error);
+				callback(error);
+			} else {
+				// convert to date
+				data.mtime = new Date(data.mtime);
+				
+				callback(null, new FileSystemStats(data));
+			}
+		});
+    }
     
     function readdir(path, callback) {
-        callback = _forceAsync(callback);
+		console.info("readdir/path", path);
+		
+		_postServer("ls", path, (error, files) => {
+			if (error) {
+				// TODO
+				console.error("readdir/error", error);
+				callback(FileSystemError.NOT_FOUND);
+				//callback(FileSystemError.INVALID_PARAMS);
+
+				return;
+			}
+			
+			console.info("readdir/files", files);
         
-        var storeData = _getFromDemoStore(path);
-        if (!storeData) {
-            callback(FileSystemError.NOT_FOUND);
-        } else if (typeof storeData === "string") {
-            callback(FileSystemError.INVALID_PARAMS);
-        } else {
-            var names = Object.keys(storeData);
-            var stats = [];
-            names.forEach(function (name) {
-                stats.push(_statFromStore(storeData[name]));
-            });
-            callback(null, names, stats);
-        }
+			const stats = [];
+
+			files.forEach(function (file, index) {
+				stat(file, (error, stat) => {
+					if (error) {
+						// TODO
+						console.error("readdir/error", error);
+						callback(FileSystemError.NOT_FOUND);
+						//callback(FileSystemError.INVALID_PARAMS);
+
+						return;
+					}
+					
+					stats.push(stat);
+					
+					if (index === files.length - 1) {
+						callback(null, files, stats);
+					}
+				});
+			});
+		});
     }
     
     function mkdir(path, mode, callback) {
-        callback("Cannot modify folders on HTTP demo server");
+        callback("Cannot modify folders on HTTP cloud server");
     }
     
     function rename(oldPath, newPath, callback) {
-        callback("Cannot modify files on HTTP demo server");
+        callback("Cannot modify files on HTTP cloud server");
     }
     
     function readFile(path, options, callback) {
-        console.log("Reading 'file': " + path);
-        
         if (typeof options === "function") {
             callback = options;
         }
-        callback = _forceAsync(callback);
-        
-        var storeData = _getFromDemoStore(path);
-        if (!storeData && storeData !== "") {
-            callback(FileSystemError.NOT_FOUND);
-        } else if (typeof storeData !== "string") {
-            callback(FileSystemError.INVALID_PARAMS);
-        } else {
-            var name = _nameFromPath(path);
-            callback(null, storeData, _statFromStore(storeData[name]));
-        }
+		
+        console.log("Reading 'file': " + path);
+		
+		stat(path, (statError, stats) => {
+			if (statError) {
+				// TODO
+				
+				callback(FileSystemError.NOT_FOUND);
+				//callback(FileSystemError.INVALID_PARAMS);
+				return;
+			}
+			
+			_postServer("read", path, (readError, data) => {
+				if (readError)  {
+					callback(readError);
+				} else {
+					callback(null, data, stats);
+				}
+			});
+		});
     }
     
     function writeFile(path, data, options, callback) {
-        callback("Cannot save to HTTP demo server");
+        callback("Cannot save to HTTP cloud server");
     }
     
     function unlink(path, callback) {
-        callback("Cannot modify files on HTTP demo server");
+        callback("Cannot modify files on HTTP cloud server");
     }
     
     function moveToTrash(path, callback) {
-        callback("Cannot delete files on HTTP demo server");
+        callback("Cannot delete files on HTTP cloud server");
     }
     
     function initWatchers(changeCallback, offlineCallback) {
@@ -226,7 +312,7 @@ define(function (require, exports, module) {
     }
     
     function watchPath(path, callback) {
-        console.warn("File watching is not supported on immutable HTTP demo server");
+        console.warn("File watching is not supported on immutable HTTP cloud server");
         
         callback = _forceAsync(callback);
         callback();
