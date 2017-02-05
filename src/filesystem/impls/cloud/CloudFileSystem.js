@@ -30,26 +30,64 @@ define(function (require, exports, module) {
     
     var FileSystemError = require("filesystem/FileSystemError"),
         FileSystemStats = require("filesystem/FileSystemStats");
-    
+	
+	function _postServer(func, data, callback) {
+		const URL = location.origin + "/api/filesystem/" + func,
+			  xhr = new XMLHttpRequest();
+		
+		xhr.open("POST", URL, true);
+
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState === 4) {
+				// DONE
+				if (xhr.status === 200) {
+					// OKAY
+					console.info("xhr.responseText", xhr.responseText);
+					
+					let parsedObject;
+					
+					parsedObject = xhr.responseText;
+					
+					try {
+						parsedObject = JSON.parse(xhr.responseText);
+					} catch (ex) {
+						console.warn(ex);
+					}
+					
+					callback(null, parsedObject);
+				} else {
+					// Error
+					console.error(xhr.responseText);
+					callback(xhr.responseText);
+				}
+			}
+		}
+		
+		// Send data
+		if (!data) {
+			xhr.send("{}");
+		} else if (typeof data === "object") {
+			console.info(`_postServer/typeof data === "object"`, true);
+			xhr.setRequestHeader("Content-type", "application/json");
+			
+			try {
+				xhr.send(JSON.stringify(data));
+			} catch (ex) {
+				callback(ex);
+			}
+		} else {
+			xhr.send(data);
+		}
+	}
     
     function showOpenDialog(allowMultipleSelection, chooseDirectories, title, initialPath, fileTypes, callback) {
         // FIXME
-        throw new Error();
+        throw new Error("showOpenDialog not supported");
     }
     
     function showSaveDialog(title, initialPath, proposedNewFilename, callback) {
         // FIXME
-        throw new Error();
-    }
-    
-    function _makeFakeStat(file) {
-        var options = {
-            isFile: Boolean(file),
-            mtime: new Date(0),
-            size: 0, // TODO
-            hash: 0
-        };
-        return new FileSystemStats(options);
+        throw new Error("showSaveDialog not supported");
     }
     
     function _forceAsync(cb) {
@@ -61,9 +99,8 @@ define(function (require, exports, module) {
         };
     }
 	
-	var cloudContent = {};
-    
-    cloudContent = {
+	/* Can be removed, use for reference */
+	var cloudContent = {
         "index.html": "<html>\n<head>\n    <title>Hello, world!</title>\n</head>\n<body>\n    Welcome to Brackets!\n</body>\n</html>",
         "main.css": ".hello {\n    content: 'world!';\n}",
         "samples": {
@@ -118,35 +155,6 @@ define(function (require, exports, module) {
     function _stripTrailingSlash(path) {
         return path[path.length - 1] === "/" ? path.substr(0, path.length - 1) : path;
     }
-	
-    function _getFromCloudStore(fullPath) {
-        var prefix = "/Getting Started/";
-        if (fullPath.substr(0, prefix.length) !== prefix) {
-            return null;
-        }
-        var suffix = _stripTrailingSlash(fullPath.substr(prefix.length));
-        if (!suffix) {
-            return cloudContent;
-        }
-        
-        var segments = suffix.split("/");
-        var dir = cloudContent;
-        var i;
-        for (i = 0; i < segments.length; i++) {
-            if (!dir) { return null; }
-            dir = dir[segments[i]];
-        }
-        return dir;
-    }
-    
-    function _statFromStore(storeData) {
-        return _makeFakeStat(typeof storeData === "string");
-    }
-	
-    function _nameFromPath(path) {
-        var segments = _stripTrailingSlash(path).split("/");
-        return segments[segments.length - 1];
-    }
     
     function exists(path, callback) {
         stat(path, function (err) {
@@ -157,55 +165,6 @@ define(function (require, exports, module) {
             }
         });
     }
-	
-	function _postServer(func, data, callback) {
-		const URL = location.origin + "/api/filesystem/" + func,
-			  xhr = new XMLHttpRequest();
-		
-		xhr.open("POST", URL, true);
-
-		xhr.onreadystatechange = function() {
-			if (xhr.readyState === 4) {
-				// DONE
-				if (xhr.status === 200) {
-					// OKAY
-					console.info("xhr.responseText", xhr.responseText);
-					
-					let parsedObject;
-					
-					parsedObject = xhr.responseText;
-					
-					try {
-						parsedObject = JSON.parse(xhr.responseText);
-					} catch (ex) {
-						console.warn(ex);
-					}
-					
-					callback(null, parsedObject);
-				} else {
-					// Error
-					console.error(xhr.responseText);
-					callback(xhr.responseText);
-				}
-			}
-		}
-		
-		// Send data
-		if (!data) {
-			xhr.send("{}");
-		} else if (typeof data === "object") {
-			console.info(`_postServer/typeof data === "object"`, true);
-			xhr.setRequestHeader("Content-type", "application/json");
-			
-			try {
-				xhr.send(JSON.stringify(data));
-			} catch (ex) {
-				callback(ex);
-			}
-		} else {
-			xhr.send(data);
-		}
-	}
 	
     function stat(path, callback) {
 		_postServer("stat", path, (error, data) => {
@@ -296,7 +255,21 @@ define(function (require, exports, module) {
     }
     
     function writeFile(path, data, options, callback) {
-        callback("Cannot save to HTTP cloud server");
+		console.info("writeFile/path", path);
+		console.info("writeFile/data", data);
+		console.info("writeFile/options", options);
+		
+		_postServer("write", {{path}, {data}}, (writeError, written) => {
+			if (writeError) {
+				callback(writeError);
+			} else {
+				if (written === options.expectedContents) {
+					callback(null);
+				} else {
+					callback(FileSystemError.NOT_WRITABLE);
+				}
+			}
+		});
     }
     
     function unlink(path, callback) {
