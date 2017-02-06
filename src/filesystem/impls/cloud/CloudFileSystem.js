@@ -90,6 +90,27 @@ window.define((require, exports, module) => {
 		}
 	}
 
+	function localStat (path) {
+		// FUTURE
+		
+		const
+			stored = localStorage.getItem(path),
+			existedBefore = Boolean(stored),
+			length = existedBefore ? stored.length : 0,
+			stat = {
+				"hash": 0,
+				"isFile": false,
+				"mtime": new Date(0),
+				"size": length
+			};
+
+		return new FileSystemStats(stat);
+	}
+
+	function isLocalPath (path) {
+		return path.indexOf("&&&doesnt_exist&&&") > -1 || path.indexOf("/extensions") > -1;
+	}
+
 	exports.stat = (path, callback) => {
 		postServer("stat", path, (error, data) => {
 			console.info("stat/data", data);
@@ -182,24 +203,41 @@ window.define((require, exports, module) => {
 
 		console.log(`Reading 'file': ${path}`);
 
-		exports.stat(path, (statError, stats) => {
-			if (statError) {
-				// FUTURE
+		if (isLocalPath(path)) {
+			console.info("isLocalPath//read", path);
 
+			const local = localStorage.getItem(path);
+
+			if (local) {
+				callback(null, local, localStat(path));
+			} else {
+				console.warn(`Local File not fond (${path})`);
 				callback(FileSystemError.NOT_FOUND);
-				// cb(FileSystemError.INVALID_PARAMS);
-
-				return;
 			}
+		} else {
+			exports.stat(path, (statError, stats) => {
+				if (statError) {
+					// FUTURE
 
-			postServer("read", path, (readError, data) => {
-				if (readError) {
-					callback(readError);
+					callback(FileSystemError.NOT_FOUND);
+					// cb(FileSystemError.INVALID_PARAMS);
+
+					return;
+				}
+
+				if (path.indexOf("&&&doesnt_exist&&&") > -1 || path.indexOf("/extensions") > -1) {
+					localStorage.getItem(path);
 				} else {
-					callback(null, data, stats);
+					postServer("read", path, (readError, data) => {
+						if (readError) {
+							callback(readError);
+						} else {
+							callback(null, data, stats);
+						}
+					});
 				}
 			});
-		});
+		}
 	};
 
 	exports.writeFile = (path, data, options, callback) => {
@@ -207,35 +245,47 @@ window.define((require, exports, module) => {
 		console.info("writeFile/data", data);
 		console.info("writeFile/options", options);
 
-		exports.exists(path, (existsError, existedBefore) => {
-			if (existsError) {
-				callback(existsError);
-			}
+		if (isLocalPath(path)) {
+			// FUTURE
+			
+			const
+				stored = localStorage.getItem(path),
+				existedBefore = Boolean(stored);
 
-			postServer("write", {
-				data,
-				path
-			}, (writeError, written) => {
-				if (writeError) {
-					callback(writeError);
-				} else {
-					console.log(options);
-					console.info("written", written);
-					console.info("options.expectedContents", options.expectedContents);
+			localStorage.writeItem(path, data);
 
-					if (!options.expectedContents || written === options.expectedContents) {
-						exports.stat(path, (statError, stat) => {
-							const created = !existedBefore;
-
-							callback(null, stat, created);
-						});
-					} else {
-						console.error("written !== options.expectedContents");
-						callback(FileSystemError.NOT_WRITABLE);
-					}
+			callback(null, localStat(path), !existedBefore);
+		} else {
+			exports.exists(path, (existsError, existedBefore) => {
+				if (existsError) {
+					callback(existsError);
 				}
+
+				postServer("write", {
+					data,
+					path
+				}, (writeError, written) => {
+					if (writeError) {
+						callback(writeError);
+					} else {
+						console.log(options);
+						console.info("written", written);
+						console.info("options.expectedContents", options.expectedContents);
+
+						if (!options.expectedContents || written === options.expectedContents) {
+							exports.stat(path, (statError, stat) => {
+								const created = !existedBefore;
+
+								callback(null, stat, created);
+							});
+						} else {
+							console.error("written !== options.expectedContents");
+							callback(FileSystemError.NOT_WRITABLE);
+						}
+					}
+				});
 			});
-		});
+		}
 	};
 
 	exports.unlink = (path, callback) => {
