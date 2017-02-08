@@ -67,7 +67,7 @@ window.define((require, exports, module) => {
 					callback(null, parsedObject);
 				} else {
 					// Error
-					console.error(xhr.responseText);
+					console.error(data, xhr.responseText);
 					callback(xhr.responseText);
 				}
 			}
@@ -92,19 +92,26 @@ window.define((require, exports, module) => {
 
 	function localStat (path) {
 		// FUTURE
-		
+
+		console.info("LOCALSTAT", path);
+
 		const
 			stored = localStorage.getItem(path),
-			existedBefore = Boolean(stored),
-			length = existedBefore ? stored.length : 0,
-			stat = {
-				"hash": 0,
-				"isFile": false,
-				"mtime": new Date(0),
-				"size": length
-			};
+			existedBefore = Boolean(stored);
 
-		return new FileSystemStats(stat);
+		if (existedBefore) {
+			const length = existedBefore ? stored.length : 0,
+				stat = {
+					"hash": 0,
+					"isFile": false,
+					"mtime": new Date(0),
+					"size": length
+				};
+
+			return new FileSystemStats(stat);
+		}
+
+		throw FileSystemError.NOT_FOUND;
 	}
 
 	function isLocalPath (path) {
@@ -112,19 +119,41 @@ window.define((require, exports, module) => {
 	}
 
 	exports.stat = (path, callback) => {
-		postServer("stat", path, (error, data) => {
-			console.info("stat/data", data);
+		if (isLocalPath(path)) {
+			console.log("LOCAL PATH STAT");
 
-			if (error) {
-				console.error("stat/error", error);
-				callback(error);
+			if (localStorage.getItem(path)) {
+				let stat;
+
+				try {
+					stat = localStat(path);
+				} catch (ex) {
+					callback(ex);
+
+					return;
+				}
+
+				callback(null, stat);
 			} else {
-				// convert to date
-				data.mtime = new Date(data.mtime);
-
-				callback(null, new FileSystemStats(data));
+				callback(FileSystemError.NOT_FOUND);
 			}
-		});
+		} else {
+			console.log("REMOTE PATH STAT");
+
+			postServer("stat", path, (error, data) => {
+				console.info("stat/data", data);
+
+				if (error) {
+					console.error("stat/error", error);
+					callback(error);
+				} else {
+					// convert to date
+					data.mtime = new Date(data.mtime);
+
+					callback(null, new FileSystemStats(data));
+				}
+			});
+		}
 	};
 
 	exports.showOpenDialog = (allowMultipleSelection, chooseDirectories, title, initialPath, fileTypes, callback) => {
@@ -136,7 +165,7 @@ window.define((require, exports, module) => {
 	};
 
 	exports.exists = (path, callback) => {
-		postServer("stat", path, (error) => {
+		exports.stat(path, (error) => {
 			if (error) {
 				callback(null, false);
 			} else {
@@ -148,40 +177,65 @@ window.define((require, exports, module) => {
 	exports.readdir = (path, callback) => {
 		console.info("readdir/path", path);
 
-		postServer("ls", path, (error, files) => {
-			if (error) {
-				// FUTURE
-				console.error("readdir/error", error);
+		if (isLocalPath(path)) {
+			console.log("readdir", `${path} is a local directory`);
 
-				callback(FileSystemError.NOT_FOUND);
-				// callback(FileSystemError.INVALID_PARAMS);
+			const
+				files = [],
+				stats = [];
 
-				return;
-			}
+			Object.keys(localStorage).forEach((filePath) => {
+				if (filePath.indexOf(path) === 0) {
+					console.log("readdir", `${filePath} is in ${path}`);
+					files.push(filePath);
+					stats.push(localStat(filePath));
+				} else {
+					console.log("readdir", `${filePath} is *NOT* in ${path}`);
+				}
+			});
 
-			console.info("readdir/files", files);
+			callback(null, files, stats)
+		} else {
+			console.log("readdir", `${path} is a remote directory`);
 
-			const stats = [];
+			postServer("ls", path, (error, files) => {
+				if (error) {
+					// FUTURE
+					console.error("readdir/error", error);
 
-			files.forEach((file, index) => {
-				exports.stat(file, (fsError, stat) => {
-					if (fsError) {
-						// FUTURE
-						console.error("readdir/error", error);
-						callback(FileSystemError.NOT_FOUND);
-						// callback(FileSystemError.INVALID_PARAMS);
+					callback(FileSystemError.NOT_FOUND);
+					// callback(FileSystemError.INVALID_PARAMS);
 
-						return;
-					}
+					return;
+				}
 
-					stats.push(stat);
+				console.info("readdir/files", files);
 
-					if (index === files.length - 1) {
-						callback(null, files, stats);
-					}
+				const stats = [];
+
+				files.forEach((file) => {
+					exports.stat(file, (fsError, stat) => {
+						if (fsError) {
+							// FUTURE
+							console.error("readdir/error", error);
+							callback(FileSystemError.NOT_FOUND);
+							// callback(FileSystemError.INVALID_PARAMS);
+
+							return;
+						}
+
+						console.log("readdir/foreach/newstat", stat);
+						stats.push(stat);
+
+						if (stats.length === files.length) {
+							console.log("readdir/foreach/files", files);
+							console.log("readdir/foreach/stats", stats);
+							callback(null, files, stats);
+						}
+					});
 				});
 			});
-		});
+		}
 	};
 
 	exports.mkdir = (path, mode, callback) => {
@@ -215,6 +269,8 @@ window.define((require, exports, module) => {
 				callback(FileSystemError.NOT_FOUND);
 			}
 		} else {
+			console.info("postServer//read", path);
+
 			exports.stat(path, (statError, stats) => {
 				if (statError) {
 					// FUTURE
@@ -247,15 +303,18 @@ window.define((require, exports, module) => {
 
 		if (isLocalPath(path)) {
 			// FUTURE
-			
+			console.info("writeFile/isLocalPath", true);
+
 			const
 				stored = localStorage.getItem(path),
 				existedBefore = Boolean(stored);
 
-			localStorage.writeItem(path, data);
+			window.localStorage.setItem(path, data);
 
 			callback(null, localStat(path), !existedBefore);
 		} else {
+			console.info("writeFile/isLocalPath", false);
+
 			exports.exists(path, (existsError, existedBefore) => {
 				if (existsError) {
 					callback(existsError);
@@ -307,6 +366,7 @@ window.define((require, exports, module) => {
 
 	exports.unwatchPath = (path, callback) => {
 		callback("File watching is not supported on immutable HTTP cloud server");
+		// callback();
 	};
 
 	exports.unwatchAll = (callback) => {
